@@ -2,17 +2,18 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.routing.RoundRobinPool
 
 import scala.collection.mutable
+import scala.concurrent.duration.DurationInt
 
 case class MyMessage1(msg: String)
 case class Confirmation(sender: ActorRef, numMessagesProcessed: Int, childActor: ActorRef)
 case object RequestConfirmation
 
 class CChildActor1 extends Actor {
-  var messageProcessed: Int = 0
 
+  var messageProcessed: Int = 0
   def receive: Receive = {
     case MyMessage1(msg) =>
-      println(s"${self.path.name} received message: $msg")
+      println(s"${self} received message: $msg")
       messageProcessed += 1
       sender() ! Confirmation(sender(), messageProcessed, self)
     case RequestConfirmation =>
@@ -28,27 +29,25 @@ class PParentActor1 extends Actor {
 
   def receive: Receive = {
     case "start" =>
-      (1 to 10).foreach { j =>
-        val childActor: ActorRef = context.actorOf(RoundRobinPool(10).props(Props[CChildActor1]), s"childActor$j")
-        (1 to 10).foreach { i =>
+        val childActor: ActorRef = context.actorOf(RoundRobinPool(10).props(Props[CChildActor1]), s"CHILD")
+        (1 to 100).foreach { i =>
           val msg = MyMessage1(s"message $i")
           childActor ! msg
         }
-      }
 
-//    case RequestConfirmation =>
-//      println(s"ParentActor received Request Confirm msg")
-//      sender() ! Confirmation(sender, totalMessagesProcessed, self)
-//
-//      if (childActors.nonEmpty) {
-//        childActors.keys.foreach { child =>
-//          println(s"I am child printing my self $child")
-//          child ! RequestConfirmation
-//        }
-//      }else
-//        {
-//          println("child actors are empty no request is sent ")
-//        }
+    case RequestConfirmation =>
+      println(s"ParentActor received Request Confirm msg")
+      sender() ! Confirmation(sender, totalMessagesProcessed, self)
+
+      if (childActors.nonEmpty) {
+        childActors.keys.foreach { child =>
+          println(s"I am child printing my self $child")
+          child ! RequestConfirmation
+        }
+      }else
+        {
+          println("child actors are empty no request is sent ")
+        }
 
     case Confirmation(sender, numMessagesProcessed, childActor) =>
       println(s"${sender.path.name} processed $numMessagesProcessed messages")
@@ -60,6 +59,7 @@ class PParentActor1 extends Actor {
       println(s"childActors: ${childActors.size}")
       println(s"ConfirmationReceived: ${confirmationsReceived.size}")
       totalMessagesProcessed += numMessagesProcessed
+      println(s"$totalMessagesProcessed")
       if (totalMessagesProcessed == 100) {
         println("I am terminating")
         context.system.terminate()
@@ -76,5 +76,5 @@ object myObj7 extends App {
   val system = ActorSystem("MyActorSystem")
   val parentActor = system.actorOf(Props[PParentActor1], "parent")
   parentActor ! "start"
-  //system.scheduler.scheduleOnce(1.seconds, parentActor, RequestConfirmation)(system.dispatcher, parentActor)
+  system.scheduler.scheduleOnce(1.seconds, parentActor, RequestConfirmation)(system.dispatcher, parentActor)
 }

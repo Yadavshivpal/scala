@@ -1,4 +1,6 @@
-import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import akka.actor.{Actor, ActorSystem, Props}
+
+import scala.util.Random
 // Define the message that will be sent
 case class MyMessage(msg: String)
 case object AllMessagesProcessed
@@ -17,13 +19,12 @@ class PParentActor extends Actor {
   var confirmationsReceived: Int = 0
   def receive: Receive = {
     case "start" =>
-      (1 to 10).foreach { j =>
-        val randomChild: ActorRef = context.actorOf(Props[CChildActor], s"childActor$j")
-        (1 to 10).foreach { i =>
+        val randomChild = (1 to 10 ).map(i => context.actorOf(Props[CChildActor], s"childActor$i"))
+        (1 to 100).foreach { i =>
+          val randomI = Random.nextInt(randomChild.length)
+          val randomC = randomChild(randomI)
           val msg = MyMessage(s"message $i")
-          randomChild ! msg
-        }
-      }
+          randomC ! msg }
     case AllMessagesProcessed =>
       confirmationsReceived += 1
       if(confirmationsReceived == 100)
