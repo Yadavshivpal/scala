@@ -3,31 +3,30 @@ import akka.routing.RoundRobinPool
 
 import scala.collection.mutable
 import scala.concurrent.duration.DurationInt
-// Define the message that will be sent
-case class MyMessage1(msg: String)
-case class Confirmation(sender: ActorRef, numMessagesProcessed: Int)
-case object RequestConfirmation
-// Define the child actor that will receive the message
-class CChildActor1 extends Actor {
 
+case class MyMessage1(msg: String)
+case class Confirmation(sender: ActorRef, numMessagesProcessed: Int, childActor: ActorRef)
+case object RequestConfirmation
+
+class CChildActor1 extends Actor {
   var messageProcessed: Int = 0
+
   def receive: Receive = {
     case MyMessage1(msg) =>
       println(s"${self.path.name} received message: $msg")
       messageProcessed += 1
-      sender() ! Confirmation(sender(), messageProcessed)
+      sender() ! Confirmation(sender(), messageProcessed, self)
     case RequestConfirmation =>
       println(s"${self.path.name} received RequestConfirmation message")
-      sender() ! Confirmation(sender, messageProcessed)
-
+      sender() ! Confirmation(sender, messageProcessed, self)
   }
 }
 
-// Define the parent actor that will create the child actors and send the message
 class PParentActor1 extends Actor {
-  var confirmationsReceived: Int = 0
+  var confirmationsReceived: Map[ActorRef, Int] = Map.empty.withDefaultValue(0)
   var totalMessagesProcessed: Int = 0
   val childActors: mutable.Map[ActorRef, Int] = mutable.Map.empty
+
   def receive: Receive = {
     case "start" =>
       (1 to 10).foreach { j =>
@@ -39,40 +38,37 @@ class PParentActor1 extends Actor {
       }
     case RequestConfirmation =>
       println(s"ParentActor received Request Confirm msg")
-      sender() ! Confirmation(sender, totalMessagesProcessed)
-     if(childActors.nonEmpty) {
-       childActors.keys.foreach { child =>
-         //println(s"I am child printing myself $child")
-         child ! RequestConfirmation
-       }
-     }
+      sender() ! Confirmation(sender, totalMessagesProcessed, self)
 
-    case Confirmation(sender, numMessagesProcessed) =>
-      println(s"${sender.path.name} processed $numMessagesProcessed messages")
-      //println(s"Parent Actor received Confirmation message with $numMessagesProcessed messages processed")
-      childActors.get(sender) match {
-        case Some(processed) =>
-          childActors.put(sender,processed+numMessagesProcessed)
-        case None =>
-          childActors.put(sender,numMessagesProcessed)
+      if (childActors.nonEmpty) {
+        childActors.keys.foreach { child =>
+          child ! RequestConfirmation
+        }
       }
 
-      totalMessagesProcessed +=numMessagesProcessed
-      confirmationsReceived += 1
-      println(s"${sender.path.name} processed $numMessagesProcessed messages, $confirmationsReceived total msg: $totalMessagesProcessed" )
-      if(confirmationsReceived == 100)
-      {
+    case Confirmation(sender, numMessagesProcessed, childActor) =>
+      println(s"${sender.path.name} processed $numMessagesProcessed messages")
+      childActors.put(childActor, childActors.getOrElse(childActor, 0) + numMessagesProcessed)
+
+      confirmationsReceived = confirmationsReceived.updated(childActor, confirmationsReceived(childActor) + 1)
+      println(s"${childActor.path.name} processed $numMessagesProcessed messages, ${confirmationsReceived(childActor)} total confirmations received")
+
+      println(s"childActors: ${childActors.size}")
+      println(s"ConfirmationReceived: ${confirmationsReceived.size}")
+      totalMessagesProcessed += numMessagesProcessed
+      if (totalMessagesProcessed == 100) {
+        println(confirmationsReceived.size)
         println("I am terminating")
         context.system.terminate()
       }
+
   }
 
   override def postStop(): Unit = {
-    println(s"${self.path.name} stopped" )
+    println(s"${self.path.name} stopped")
   }
 }
 
-// Create the actor system and start the parent actor
 object myObj7 extends App {
   val system = ActorSystem("MyActorSystem")
   val parentActor = system.actorOf(Props[PParentActor1], "parent")

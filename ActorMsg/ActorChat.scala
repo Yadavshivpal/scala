@@ -3,21 +3,12 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 case class MyMessage(msg: String)
 case object AllMessagesProcessed
 // Define the child actor that will receive the message
-class CChildActor(parentActor: ActorRef) extends Actor {
+class CChildActor() extends Actor {
 
-  var messageProcessed: Option[Int] = None
   def receive: Receive = {
     case MyMessage(msg) =>
       println(s"${self.path.name} received message: $msg")
-      messageProcessed = messageProcessed match {
-        case Some(count) => Some(count+1)
-        case None => Some(1)
-      }
-      println(s"$messageProcessed")
-      if(messageProcessed.contains(100)){
-        println(s"$messageProcessed")
-        parentActor ! AllMessagesProcessed
-      }
+      sender() ! AllMessagesProcessed
   }
 }
 
@@ -26,21 +17,16 @@ class PParentActor extends Actor {
   var confirmationsReceived: Int = 0
   def receive: Receive = {
     case "start" =>
-      // Create 10 child actors
-      val childActors: Seq[ActorRef] = (1 to 10).map { i =>
-        context.actorOf(Props(new CChildActor(self)), s"child-$i")
+      (1 to 10).foreach { j =>
+        val randomChild: ActorRef = context.actorOf(Props[CChildActor], s"childActor$j")
+        (1 to 10).foreach { i =>
+          val msg = MyMessage(s"message $i")
+          randomChild ! msg
+        }
       }
-
-      // Send 100 messages to the child actors
-      (1 to 100).foreach { i =>
-        val msg = MyMessage(s"message $i")
-        // Send the message to a random child actor
-        val randomChild = childActors(scala.util.Random.nextInt(childActors.size))
-        randomChild ! msg
-      }
-    case "AllMessagesProcessed" =>
+    case AllMessagesProcessed =>
       confirmationsReceived += 1
-      if(confirmationsReceived == 10)
+      if(confirmationsReceived == 100)
       {
         println("I am terminating")
         context.system.terminate();
