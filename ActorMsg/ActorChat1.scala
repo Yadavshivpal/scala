@@ -2,7 +2,6 @@ import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.routing.RoundRobinPool
 
 import scala.collection.mutable
-import scala.concurrent.duration.DurationInt
 
 case class MyMessage1(msg: String)
 case class Confirmation(sender: ActorRef, numMessagesProcessed: Int, childActor: ActorRef)
@@ -36,15 +35,20 @@ class PParentActor1 extends Actor {
           childActor ! msg
         }
       }
-    case RequestConfirmation =>
-      println(s"ParentActor received Request Confirm msg")
-      sender() ! Confirmation(sender, totalMessagesProcessed, self)
 
-      if (childActors.nonEmpty) {
-        childActors.keys.foreach { child =>
-          child ! RequestConfirmation
-        }
-      }
+//    case RequestConfirmation =>
+//      println(s"ParentActor received Request Confirm msg")
+//      sender() ! Confirmation(sender, totalMessagesProcessed, self)
+//
+//      if (childActors.nonEmpty) {
+//        childActors.keys.foreach { child =>
+//          println(s"I am child printing my self $child")
+//          child ! RequestConfirmation
+//        }
+//      }else
+//        {
+//          println("child actors are empty no request is sent ")
+//        }
 
     case Confirmation(sender, numMessagesProcessed, childActor) =>
       println(s"${sender.path.name} processed $numMessagesProcessed messages")
@@ -57,7 +61,6 @@ class PParentActor1 extends Actor {
       println(s"ConfirmationReceived: ${confirmationsReceived.size}")
       totalMessagesProcessed += numMessagesProcessed
       if (totalMessagesProcessed == 100) {
-        println(confirmationsReceived.size)
         println("I am terminating")
         context.system.terminate()
       }
@@ -73,5 +76,5 @@ object myObj7 extends App {
   val system = ActorSystem("MyActorSystem")
   val parentActor = system.actorOf(Props[PParentActor1], "parent")
   parentActor ! "start"
-  system.scheduler.scheduleOnce(1.seconds, parentActor, RequestConfirmation)(system.dispatcher, parentActor)
+  //system.scheduler.scheduleOnce(1.seconds, parentActor, RequestConfirmation)(system.dispatcher, parentActor)
 }
