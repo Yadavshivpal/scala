@@ -15,7 +15,7 @@ class CChildActor1 extends Actor {
     case MyMessage1(msg) =>
       println(s"${self.path.name} received message: $msg")
       messageProcessed += 1
-      sender() ! Confirmation(sender(), 1)
+      sender() ! Confirmation(sender(), messageProcessed)
     case RequestConfirmation =>
       println(s"${self.path.name} received RequestConfirmation message")
       sender() ! Confirmation(sender, messageProcessed)
@@ -30,17 +30,19 @@ class PParentActor1 extends Actor {
   val childActors: mutable.Map[ActorRef, Int] = mutable.Map.empty
   def receive: Receive = {
     case "start" =>
-      val childActor: ActorRef = context.actorOf(RoundRobinPool(10).props(Props[CChildActor1]), "childActor")
-      (1 to 100).foreach { i =>
-        val msg = MyMessage1(s"message $i")
-        childActor ! msg
+      (1 to 10).foreach { j =>
+        val childActor: ActorRef = context.actorOf(RoundRobinPool(10).props(Props[CChildActor1]), s"childActor$j")
+        (1 to 10).foreach { i =>
+          val msg = MyMessage1(s"message $i")
+          childActor ! msg
+        }
       }
     case RequestConfirmation =>
       println(s"ParentActor received Request Confirm msg")
       sender() ! Confirmation(sender, totalMessagesProcessed)
      if(childActors.nonEmpty) {
        childActors.keys.foreach { child =>
-         println(s"I am child printing myself $child")
+         //println(s"I am child printing myself $child")
          child ! RequestConfirmation
        }
      }
@@ -57,8 +59,8 @@ class PParentActor1 extends Actor {
 
       totalMessagesProcessed +=numMessagesProcessed
       confirmationsReceived += 1
-      println(s"${sender.path.name} processed $numMessagesProcessed messages, $confirmationsReceived")
-      if(confirmationsReceived == 10)
+      println(s"${sender.path.name} processed $numMessagesProcessed messages, $confirmationsReceived total msg: $totalMessagesProcessed" )
+      if(confirmationsReceived == 100)
       {
         println("I am terminating")
         context.system.terminate()
